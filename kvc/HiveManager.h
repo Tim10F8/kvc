@@ -12,6 +12,7 @@ namespace fs = std::filesystem;
 
 // Forward declaration of TrustedInstallerIntegrator class
 class TrustedInstallerIntegrator;
+
 // Manage registry hives: backup, restore and defragment (supports system and user hives; TI required)
 class HiveManager
 {
@@ -49,7 +50,7 @@ private:
     struct RegistryHive {
         std::wstring name;          // Hive name (e.g., "SYSTEM")
         std::wstring registryPath;  // Registry path (e.g., "HKLM\\SYSTEM")
-        bool canRestore;            // Restorable with RegRestoreKeyW
+        bool canRestore;            // Restorable with RegReplaceKeyW
     };
 
     // === Internal Operations ===
@@ -60,11 +61,17 @@ private:
     // Validate and prepare restore from backup directory (calls ApplyRestoreAndReboot)
     bool RestoreRegistryHives(const fs::path& sourceDir);
     
-    // Apply restore and initiate system reboot (uses InitiateSystemShutdownExW)
+    // Apply restore and initiate system reboot (uses RegReplaceKeyW + InitiateSystemShutdownExW)
     bool ApplyRestoreAndReboot(const fs::path& sourceDir);
     
-    // Save a single registry hive to disk using RegSaveKeyW (requires SE_BACKUP_NAME)
+    // Schedule replacement of a single hive at next boot via RegReplaceKeyW.
+    // SYSTEM uses RegLoadKeyW->RegSaveKeyExW->RegUnLoadKeyW to produce a clean hive file first.
+    // All other hives use CopyFileW to a staging file to preserve the original backup.
+    bool ScheduleHiveReplacement(const RegistryHive& hive, const fs::path& sourceFile);
+
+    // Save a single registry hive to disk using RegSaveKeyExW (requires SE_BACKUP_NAME)
     bool SaveRegistryHive(const std::wstring& registryPath, const fs::path& destFile);
+
     
     // Elevate process to TrustedInstaller and enable required privileges
     bool ElevateToTrustedInstaller();
@@ -87,7 +94,7 @@ private:
     // Validate backup directory exists, is writable and has sufficient space
     bool ValidateBackupDirectory(const fs::path& path);
     
-    // Validate restore directory contains expected .hiv files and readable sizes
+    // Validate restore directory contains expected hive files and readable sizes
     bool ValidateRestoreDirectory(const fs::path& path);
     
     // Populate m_registryHives with supported hives and metadata (called in ctor)

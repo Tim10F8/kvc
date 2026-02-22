@@ -5,7 +5,8 @@
 
 #include "common.h"
 #include "ServiceManager.h"
-#include <shlwapi.h>
+#include <Windows.h>
+#include <string>
 
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "psapi.lib")
