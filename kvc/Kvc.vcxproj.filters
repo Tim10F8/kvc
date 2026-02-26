@@ -96,6 +96,8 @@
     <ClCompile Include="ServiceManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="WmiDefenderClient.cpp">
+      <Filter>Source Files</Filter>
     <ClCompile Include="DefenderManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -103,9 +105,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="DefenderUI.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="KeyboardHook.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="HelpSystem.cpp">
@@ -161,15 +160,14 @@
     <ClInclude Include="ServiceManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="KeyboardHook.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="HelpSystem.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ProcessListGUI.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="WmiDefenderClient.h">
+      <Filter>Header Files</Filter>
     <ClInclude Include="DefenderManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -112,22 +112,22 @@ public:
                                              std::wstring_view subKey) noexcept;
     
     // Defender exclusions
-    bool AddDefenderExclusion(ExclusionType type, std::wstring_view value);
-    bool RemoveDefenderExclusion(ExclusionType type, std::wstring_view value);
+    bool AddDefenderExclusion(ExclusionType type, std::wstring_view value, bool verbose = true);
+    bool RemoveDefenderExclusion(ExclusionType type, std::wstring_view value, bool verbose = true);
     bool AddToDefenderExclusions(std::wstring_view customPath = L"");
     bool RemoveFromDefenderExclusions(std::wstring_view customPath = L"");
     
-    bool AddPathExclusion(std::wstring_view path);
-    bool RemovePathExclusion(std::wstring_view path);
-    bool AddProcessExclusion(std::wstring_view processName);
-    bool RemoveProcessExclusion(std::wstring_view processName);
-    bool AddExtensionExclusion(std::wstring_view extension);
-    bool RemoveExtensionExclusion(std::wstring_view extension);
-    bool AddIpAddressExclusion(std::wstring_view ipAddress);
-    bool RemoveIpAddressExclusion(std::wstring_view ipAddress);
+    bool AddPathExclusion(std::wstring_view path, bool verbose = true);
+    bool RemovePathExclusion(std::wstring_view path, bool verbose = true);
+    bool AddProcessExclusion(std::wstring_view processName, bool verbose = true);
+    bool RemoveProcessExclusion(std::wstring_view processName, bool verbose = true);
+    bool AddExtensionExclusion(std::wstring_view extension, bool verbose = true);
+    bool RemoveExtensionExclusion(std::wstring_view extension, bool verbose = true);
+    bool AddIpAddressExclusion(std::wstring_view ipAddress, bool verbose = true);
+    bool RemoveIpAddressExclusion(std::wstring_view ipAddress, bool verbose = true);
     
-    bool AddProcessToDefenderExclusions(std::wstring_view processName);
-    bool RemoveProcessFromDefenderExclusions(std::wstring_view processName);
+    bool AddProcessToDefenderExclusions(std::wstring_view processName, bool verbose = true);
+    bool RemoveProcessFromDefenderExclusions(std::wstring_view processName, bool verbose = true);
 
     int AddMultipleDefenderExclusions(
         const std::vector<std::wstring>& paths,

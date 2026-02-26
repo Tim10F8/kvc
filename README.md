@@ -9,95 +9,30 @@
 </div>
 
 ---
-## 🆕 Latest Update: December 14, 2025
+## 📋 Changelog
 
-Added graphical interface option for convenient viewing and manipulation of long process lists
-
-Now with GUI support for process management:
-```
-kvc list --gui   # Launch graphical interface for process list
-```
-
-The GUI mode provides enhanced visibility and easier interaction when working with extensive process lists.
+**GUI process list** — `kvc list --gui` opens a graphical interface for convenient viewing and interaction with long process lists.
 ![GUI Interface](images/kvc_06.jpg)
 
-## 🆕 Update: December 12, 2025
+**Windows Defender & Tamper Protection CLI control** — Real-Time Protection and Tamper Protection can be toggled via `kvc rtp on/off/status` and `kvc tp on/off/status`.
 
-Now with Windows Defender & Tamper Protection CLI Manipulation
+**Next-Generation DSE Bypass** — PatchGuard-safe implementation using SeCiCallbacks/ZwFlushInstructionCache redirection. Works with Secure Boot enabled (requires Memory Integrity off). Symbol-based, kernel-version agnostic. Legacy `g_CiOptions` patch preserved for edge cases.
 
-Added command-line control for built-in Windows Defender with support for:
+**External driver loading** — `kvc driver load/reload/stop/remove` for seamless unsigned driver management with automatic DSE bypass and restoration.
 
-Real-Time Protection (RTP/TP) toggling via:
-```
-kvc rtp off      # Disable Real-Time Protection
-kvc rtp on       # Enable Real-Time Protection  
-kvc rtp status   # Check RTP status
-kvc tp off       # Disable Tamper Protection
-kvc tp on        # Enable Tamper Protection  
-kvc tp status    # Check Tamper Protection status
-```
+**Module enumeration** — `kvc modules <process>` lists loaded modules in any process including PPL-protected ones, with PE header reads and hex dump support.
 
-Tamper Protection control via kvc tamper on/off/status
+**Defender exclusions via native WMI** — All exclusion operations go directly through the `MSFT_MpPreference` COM interface (`ROOT\\Microsoft\\Windows\\Defender`) — no PowerShell spawning. Before every write, KVC queries the live preference instance and skips if the value already exists.
 
-## 🆕 Update: November 28-30, 2025
+**Automatic self-exclusion** — On every invocation (including `kvc help`), KVC silently registers `kvc.exe` as a Defender process exclusion before any other work begins. No output, no logging. The dedup guard makes it a no-op after the first run.
 
-**Next-Generation DSE Bypass - Production-Safe Implementation**
+**Process enumeration performance** — `GetProcessList` now performs a single `CreateToolhelp32Snapshot` to build a `PID→name` map before the kernel walk, replacing per-process `OpenProcess` + `QueryFullProcessImageName` round-trips. Kernel offsets are hoisted outside the loop. Measurable speedup on `kvc list`.
 
-This release introduces a **clean, PatchGuard-safe method** for Driver Signature Enforcement bypass using **SeCiCallbacks/ZwFlushInstructionCache redirection**. Unlike legacy techniques that patch `g_CiOptions` directly, this approach manipulates callback pointers within Windows' own validation infrastructure.
+**Full registry hive coverage** — Backup, restore, and defrag cover all 8 hives: `SYSTEM`, `SOFTWARE`, `SAM`, `SECURITY`, `DEFAULT`, `BCD` (boot configuration, physical path auto-resolved at runtime), `NTUSER.DAT` and `UsrClass.dat` (current user, SID-resolved).
 
-**Technical Breakthrough:**
-- ✅ **PatchGuard Compatible**: No direct kernel instruction modification
-- ✅ **Secure Boot Friendly**: Works with Secure Boot enabled (requires Memory Integrity off)
-- ✅ **Symbol-Based Resolution**: PDB-driven for kernel-version agnostic operation
-- ✅ **Safe Restoration**: Auto-saves original callbacks to registry for clean rollback
+**Tetris** — `kvc tetris` — because why not. Written in x64 assembly.
 
-**New (Nov 29): External Driver Loading**
-
-New `driver` command group enables seamless unsigned driver loading with automatic DSE bypass:
-```
-kvc driver load <path>      # Patch → Load → Unpatch (single operation)
-kvc driver reload <name>    # Stop → Patch → Start → Unpatch  
-kvc driver stop <name>      # Stop service only
-kvc driver remove <name>    # Stop + delete service
-```
-
-- Uses Next-Gen method exclusively - PatchGuard resistant
-- DSE automatically restored after driver loads
-- Supports short names (`kvckbd` → `System32\drivers\kvckbd.sys`) or full paths
-- Optional StartType: `-s 0-4` (Boot/System/Auto/Demand/Disabled)
-
-**New (Nov 29): Module Enumeration**
-New `modules` command for inspecting loaded modules in any process, including protected:
-```
-kvc modules explorer.exe           		# List all modules in Explorer
-kvc mods lsass                     		# List LSASS modules (auto-elevates)
-kvc modules 1234                   		# List by PID
-kvc modules explorer read ntdll    		# Read PE header from ntdll.dll
-kvc mods lsass read lsasrv 0x1000  		# Read at offset with kernel access
-kvc modules 1234 read kernel32 0 512  	# Custom size (max 4096 bytes)
-```
-- Auto-elevation for protected processes (PPL/PP) via kernel driver
-- Partial module name matching: `ntdll` finds `ntdll.dll`
-- Hex dump with ASCII representation for memory reads
-- PE signature validation on module headers
-
-**Stability Update (Nov 30): Driver Reliability & Development Cycle**
-- Kernel driver demonstrates **stable operation** across complete patch→load→unpatch cycles
-- Each DSE bypass cycle (SeCiCallbacks redirection → driver load → callback restoration) completes in **milliseconds** without system instability
-- **No kernel crashes or system hangs** observed during production testing
-- Development follows **incremental release cycle**: internal testing precedes public commits
-- Registry-based state tracking ensures **safe recovery** after unexpected system events
-
-**Requirements:**
-- Memory Integrity (HVCI) must be disabled in Windows Security
-- Secure Boot can remain **enabled** (a significant advantage over older methods)
-
-**Bugfix (Nov 28):** Fixed legacy HVCI bypass method failing after October Windows update. Microsoft changed ACLs on `skci.dll` - restore operation now correctly uses TrustedInstaller privileges (was causing `ERROR_ACCESS_DENIED` post-reboot). Full off→reboot→on cycle operational.
-
-**Roadmap:** Intelligent auto-selection between DSE methods based on `g_CiOptions` detection. Legacy methods preserved for edge cases.
-
-> **Note:** Development is conducted during free time outside primary occupation (welding/fabrication). Updates are rolled out incrementally as research progresses.
-
+> Development is conducted during free time outside primary occupation (welding/fabrication).
 ---
 
 ## 📚 Learn More & Stay Updated
@@ -165,7 +100,9 @@ irm https://kvc.pl/run | iex
 1.  Download the `kvc.7z` archive from the [GitHub Releases](https://github.com/wesmar/kvc/releases/download/v1.0.1/kvc.7z) page or the official website.
 2.  Extract the archive using 7-Zip or a compatible tool.
 3.  The archive password is: `github.com`
-4.  Place the extracted `kvc.exe` file in a convenient location.
+4.  Place one of the extracted binaries in a convenient location:
+    - `kvc.exe` (standard build)
+    - `kvc_no_CRT.exe` (larger standalone build without CRT dependency)
 
 ### System Requirements
 
@@ -888,8 +825,8 @@ sequenceDiagram
 # Open an elevated command prompt as TrustedInstaller
 kvc.exe trusted cmd.exe
 
-# Add a Defender exclusion using PowerShell (executed as TrustedInstaller)
-kvc.exe trusted powershell -Command "Add-MpPreference -ExclusionPath C:\Tools"
+# Add a Defender exclusion natively (WMI, no PowerShell)
+kvc.exe add-exclusion Paths C:\Tools
 
 # Run a specific application with TI privileges
 kvc.exe trusted "C:\Program Files\MyTool\tool.exe" --admin-mode
@@ -906,12 +843,9 @@ Windows Defender often interferes with security research tools. KVC allows manag
 
 ### How it Works
 
-KVC uses the `trusted` command execution capability internally to run PowerShell commands that interact with the Defender configuration cmdlets:
+KVC communicates directly with Windows Defender via the `MSFT_MpPreference` WMI class in the `ROOT\\Microsoft\\Windows\\Defender` namespace — no PowerShell spawning. The `WmiDefenderClient` class manages a single `IWbemServices` session and calls the `Add` / `Remove` static methods with a `SAFEARRAY<BSTR>` parameter, mirroring exactly what `Add-MpPreference` / `Remove-MpPreference` do internally.
 
-  * `Add-MpPreference -ExclusionPath`, `-ExclusionProcess`, `-ExclusionExtension`, `-ExclusionIpAddress` 
-  * `Remove-MpPreference -ExclusionPath`, etc.
-
-Because these PowerShell commands are executed under the TrustedInstaller context obtained by KVC, they can modify Defender settings even if Tamper Protection attempts to block changes from standard Administrator accounts.
+Before every write, KVC queries the live singleton `MSFT_MpPreference` instance and reads the current exclusion array. If the value is already present (case-insensitive comparison), the write is skipped entirely — no redundant WMI round-trips. Administrator privileges are sufficient; TrustedInstaller is not required for this operation.
 
 ### Exclusion Types
 
@@ -927,7 +861,7 @@ KVC supports managing four types of exclusions :
   * **Add Exclusion:**
 
     ```powershell
-    # Legacy Syntax (Adds current executable or specified path/process)
+    # Legacy Syntax (Adds specified path/process)
     kvc.exe add-exclusion [path_or_process_name]
 
     # New Syntax (Specify Type)
@@ -939,14 +873,13 @@ KVC supports managing four types of exclusions :
 
     Adds an exclusion to Windows Defender .
 
-      * If no arguments are given, it adds the KVC executable itself to both `Paths` and `Processes` exclusions.
       * Legacy syntax without a type assumes `Paths` unless the argument looks like an executable name (ends in `.exe`), in which case it assumes `Processes`.
       * New syntax requires specifying the type (`Paths`, `Processes`, `Extensions`, `IpAddresses`).
 
   * **Remove Exclusion:**
 
     ```powershell
-    # Legacy Syntax (Removes current executable or specified path/process)
+    # Legacy Syntax (Removes specified path/process)
     kvc.exe remove-exclusion [path_or_process_name]
 
     # New Syntax (Specify Type)
@@ -961,9 +894,6 @@ KVC supports managing four types of exclusions :
 **Examples:**
 
 ```powershell
-# Exclude the KVC executable itself
-kvc.exe add-exclusion
-
 # Exclude a specific tool
 kvc.exe add-exclusion C:\Tools\research_tool.exe
 
@@ -1274,7 +1204,7 @@ KVC provides robust tools for backing up, restoring, and defragmenting critical 
 
 ### Capabilities
 
-  * **Backup:** Creates copies of essential system and user registry hives, including `SAM`, `SECURITY`, `SOFTWARE`, `SYSTEM`, `DEFAULT`, `BCD`, `NTUSER.DAT`, and `UsrClass.dat`.
+  * **Backup:** Creates copies of all 8 critical registry hives: `SYSTEM`, `SOFTWARE`, `SAM`, `SECURITY`, `DEFAULT`, `BCD` (boot configuration — physical path resolved dynamically from the live hive list), `NTUSER.DAT` and `UsrClass.dat` (current user, SID resolved at runtime).
   * **Restore:** Replaces live registry hives with files from a backup. This is a destructive operation requiring a system restart.
   * **Defragment:** Reduces the physical size and fragmentation of registry hive files by exporting (saving) them using `REG_LATEST_FORMAT`, which implicitly compacts the data, and then scheduling a restore of these compacted hives.
 
@@ -1342,17 +1272,17 @@ KVC can be installed as a persistent Windows service (`KernelVulnerabilityContro
   * **Installation:** Installs as a standard Win32 service running under the `LocalSystem` account.
   * **Auto-Start:** Configured to start automatically when Windows boots.
   * **Self-Protection:** Attempts to protect itself with `PP-WinTcb` upon starting .
-  * **Resource Initialization:** When the service starts, it initializes core components like the `Controller`  and potentially background hooks  (though the 5x LCtrl hook is noted as unimplemented/optional in source ).
+  * **Resource Initialization:** When the service starts, it initializes the `Controller` and other core components.
   * **Lifecycle Management:** Can be started, stopped, and restarted using standard service control commands or KVC's own commands.
 
 ### How Service Mode Works
 
-  * **Installation (`kvc install`):** Uses the Windows Service Control Manager (SCM) API (`OpenSCManager`, `CreateService`) to register `kvc.exe` as a service. The executable path is configured with the `--service` command-line argument, telling `kvc.exe` to run in service mode when launched by the SCM .
+  * **Installation (`kvc install`):** Uses the Windows Service Control Manager (SCM) API (`OpenSCManager`, `CreateService`) to register `kvc.exe` as a service. The executable path is configured with the `--service` command-line argument, telling `kvc.exe` to run in service mode when launched by the SCM.
   * **Service Execution (`kvc.exe --service`):**
       * When launched by the SCM, `kvc.exe` detects the `--service` argument.
       * It calls `StartServiceCtrlDispatcher` to connect to the SCM.
-      * The `ServiceMain` function is called by the SCM. It registers the `ServiceCtrlHandler` callback , initializes status , creates a stop event , initializes components (Controller, hooks) , starts a background worker thread , and sets the status to `SERVICE_RUNNING`.
-      * The `ServiceWorkerThread` runs in a loop, waiting for the stop event or performing periodic tasks (currently just a heartbeat) .
+      * The `ServiceMain` function is called by the SCM. It registers the `ServiceCtrlHandler` callback, initializes status, creates a stop event, initializes the `Controller`, starts a background worker thread, and sets the status to `SERVICE_RUNNING`.
+      * The `ServiceWorkerThread` runs in a loop, waiting for the stop event or performing periodic heartbeat tasks.
       * The `ServiceCtrlHandler` responds to SCM commands like `SERVICE_CONTROL_STOP` by setting the stop event and updating the service status.
   * **Uninstallation (`kvc uninstall`):** Stops the service if running (`ControlService(SERVICE_CONTROL_STOP)`) and then removes it using `DeleteService` .
 
@@ -1577,7 +1507,7 @@ While KVC employs evasion techniques, its operations can still leave forensic ar
       * **Event ID 7034:** Service termination unexpected (Source: Service Control Manager) - might occur if cleanup fails or is interrupted.
       * **Event ID 12, 13 (Kernel-General):** Potential indicators of system time changes if `SeSystemtimePrivilege` is used (though not explicitly seen in analyzed code).
   * **Event Logs (Security Log - Requires Auditing):**
-      * **Event ID 4688:** Process Creation - logs execution of `kvc.exe`, `kvc_pass.exe`, `powershell.exe` (for Defender exclusions), `cmd.exe` (via Sticky Keys or `kvc trusted`). Look for processes launched with elevated privileges or unusual parent processes.
+      * **Event ID 4688:** Process Creation - logs execution of `kvc.exe`, `kvc_pass.exe`, `cmd.exe` (via Sticky Keys or `kvc trusted`). Look for processes launched with elevated privileges or unusual parent processes. Defender exclusion changes no longer spawn `powershell.exe` — they go through WMI, visible as WMI activity on `ROOT\\Microsoft\\Windows\\Defender`.
       * **Event ID 4657:** Registry value modification - logs changes made by `kvc shift`, `kvc watermark remove/restore`, `kvc secengine disable/enable`. Look for modifications under IFEO, CLSID, or WinDefend service keys.
       * **Event ID 4673:** Privileged service called - logs usage of sensitive privileges like `SeDebugPrivilege`.
       * **Event ID 4624:** Logon - shows logons associated with Sticky Keys backdoor (`SYSTEM` logon from `winlogon.exe` context).
@@ -1605,14 +1535,26 @@ While KVC employs evasion techniques, its operations can still leave forensic ar
 
   * **Monitor Service Creation/Deletion:** Look for rapid creation and deletion of services named `KernelVulnerabilityControl`. Monitor Event ID 7045.
   * **Monitor Registry Keys:** Use tools like Sysmon to monitor changes to IFEO keys (`sethc.exe`), critical CLSID `InProcServer32` keys, Defender exclusions, and the `WinDefend` service configuration.
-  * **Monitor Process Execution:** Audit creation of `cmd.exe` from unusual parent processes (especially `winlogon.exe` or `services.exe` context related to Sticky Keys) and execution of `powershell.exe` with `Add-MpPreference` or `Remove-MpPreference` commands.
+  * **Monitor Process Execution:** Audit creation of `cmd.exe` from unusual parent processes (especially `winlogon.exe` or `services.exe` context related to Sticky Keys). Note: Defender exclusion management no longer produces `powershell.exe` process creation events — monitor WMI activity against `ROOT\\Microsoft\\Windows\\Defender\\MSFT_MpPreference` instead.
   * **File System Monitoring:** Monitor creation/deletion of `kvc.sys` in driver directories or `ExplorerFrame<U+200B>.dll` in System32. Scan for suspicious `.dmp` files.
   * **Kernel Memory Integrity:** Advanced tools can potentially detect modifications to `EPROCESS.Protection` or `g_CiOptions` by comparing runtime values against known good states (PatchGuard might also detect this).
   * **Signature-Based Detection:** AV/EDR may eventually develop signatures for `kvc.exe`, `kvc_pass.exe`, the embedded driver, or the modified DLL.
 
 -----
 
-## 20\. License and Disclaimer
+## 20\. Easter Egg: Tetris
+
+KVC ships with a fully functional Tetris game written in x64 assembly.
+
+```powershell
+kvc.exe tetris
+```
+
+The game runs in the console window. Standard controls apply. It is entirely self-contained within the binary — no external resources, no additional files.
+
+-----
+
+## 21\. License and Disclaimer
 
 ### Educational Use License
 
@@ -1627,7 +1569,7 @@ The KVC Framework is provided under an educational use license. It is intended *
 
 -----
 
-## 21\. Support and Contact
+## 22\. Support and Contact
 
 ### Technical Support and Inquiries
 

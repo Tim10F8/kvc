@@ -385,7 +385,7 @@ void HelpSystem::PrintTechnicalFeatures() noexcept
 void HelpSystem::PrintDefenderNotes() noexcept
 {
     PrintSectionHeader(L"Defender Exclusion Notes");
-    std::wcout << L"  Defender exclusions use PowerShell Add-MpPreference commands with TrustedInstaller.\n";
+    std::wcout << L"  Defender exclusions use the WMI MSFT_MpPreference COM interface (root\\Microsoft\\Windows\\Defender).\n";
     std::wcout << L"  Extensions: Automatically adds leading dot if missing (.exe, not exe)\n";
     std::wcout << L"  Processes: Extracts filename from full path if provided\n";
     std::wcout << L"  IpAddresses: Supports CIDR notation (192.168.1.0/24)\n";
@@ -504,7 +504,7 @@ void HelpSystem::PrintUsageExamples(std::wstring_view programName) noexcept
     printLine(L"kvc install-context", L"Add right-click menu entries");
     
     // Windows Defender exclusions
-    printLine(L"kvc add-exclusion", L"Add current program to exclusions");
+    printLine(L"kvc add-exclusion Processes kvc.exe", L"Add process to exclusions (manual)");
     printLine(L"kvc add-exclusion C:\\malware.exe", L"Add specific file to exclusions");
     printLine(L"kvc add-exclusion Paths C:\\temp", L"Add folder to path exclusions");
     printLine(L"kvc add-exclusion Processes cmd.exe", L"Add process to exclusions");

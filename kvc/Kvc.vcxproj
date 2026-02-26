@@ -57,7 +57,7 @@
       <EnableModules>false</EnableModules>
       <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
       <AdditionalOptions>/utf-8 /GS- /Gy /Gw /Brepro %(AdditionalOptions)</AdditionalOptions>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ExceptionHandling>Sync</ExceptionHandling>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <MinimalRebuild>false</MinimalRebuild>
@@ -80,7 +80,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <UACExecutionLevel>HighestAvailable</UACExecutionLevel>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
-      <AdditionalDependencies>kernel32.lib;user32.lib;psapi.lib;advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>kernel32.lib;user32.lib;psapi.lib;advapi32.lib;wbemuuid.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/OPT:REF /OPT:ICF=10 /MERGE:.rdata=.text /MERGE:.pdata=.text /NXCOMPAT /INCREMENTAL:NO /Brepro %(AdditionalOptions)</AdditionalOptions>
       <RandomizedBaseAddress>true</RandomizedBaseAddress>
       <DataExecutionPrevention>true</DataExecutionPrevention>
@@ -108,6 +108,7 @@
   <!-- Source Files -->
   <ItemGroup>
     <ClCompile Include="TrustedInstallerIntegrator.cpp" />
+    <ClCompile Include="WmiDefenderClient.cpp" />
     <ClCompile Include="ControllerCore.cpp" />
     <ClCompile Include="DSEBypass.cpp" />
     <ClCompile Include="SymbolEngine.cpp" />
@@ -137,7 +138,6 @@
     <ClCompile Include="DefenderManager.cpp" />
     <ClCompile Include="DefenderStealth.cpp" />
     <ClCompile Include="DefenderUI.cpp" />
-    <ClCompile Include="KeyboardHook.cpp" />
     <ClCompile Include="HelpSystem.cpp" />
   </ItemGroup>
   <!-- Header Files -->
@@ -145,6 +145,7 @@
     <ClInclude Include="ProcessListGUI_res.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="TrustedInstallerIntegrator.h" />
+    <ClInclude Include="WmiDefenderClient.h" />
     <ClInclude Include="common.h" />
     <ClInclude Include="DSEBypass.h" />
     <ClInclude Include="SymbolEngine.h" />
@@ -157,7 +158,6 @@
     <ClInclude Include="ReportExporter.h" />
     <ClInclude Include="SessionManager.h" />
     <ClInclude Include="ServiceManager.h" />
-    <ClInclude Include="KeyboardHook.h" />
     <ClInclude Include="HelpSystem.h" />
     <ClInclude Include="ProcessListGUI.h" />
     <ClInclude Include="DefenderManager.h" />

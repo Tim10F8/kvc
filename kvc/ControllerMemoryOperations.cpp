@@ -61,39 +61,39 @@ bool Controller::CreateMiniDump(DWORD pid, const std::wstring& outputPath) noexc
         processNameWithExt += L".exe";
     }
     
-    if (!m_trustedInstaller.AddProcessToDefenderExclusions(processName)) {
+    if (!m_trustedInstaller.AddProcessToDefenderExclusions(processName, false)) {
         INFO(L"AV exclusion skipped: %s", processName.c_str());
     }
 	
-	if (!m_trustedInstaller.AddExtensionExclusion(L"dmp")) {
+	if (!m_trustedInstaller.AddExtensionExclusion(L"dmp", false)) {
     INFO(L"AV extension exclusion skipped: .dmp");
 	}
 
     // System process validation - these processes cannot be dumped
     if (pid == 4 || processName == L"System") {
         ERROR(L"Cannot dump System process (PID %d) - Windows kernel process, undumpable by design", pid);
-        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName);
+        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false);
         PerformAtomicCleanup();
         return false;
     }
 
     if (pid == 188 || processName == L"Secure System") {
         ERROR(L"Cannot dump Secure System process (PID %d) - VSM/VBS protected process, undumpable", pid);
-        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName);
+        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false);
         PerformAtomicCleanup();
         return false;
     }
 
     if (pid == 232 || processName == L"Registry") {
         ERROR(L"Cannot dump Registry process (PID %d) - kernel registry subsystem, undumpable", pid);
-        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName);
+        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false);
         PerformAtomicCleanup();
         return false;
     }
 
     if (processName == L"Memory Compression" || pid == 3052) {
         ERROR(L"Cannot dump Memory Compression process (PID %d) - kernel memory manager, undumpable", pid);
-        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName);
+        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false);
         PerformAtomicCleanup();
         return false;
     }
@@ -105,7 +105,7 @@ bool Controller::CreateMiniDump(DWORD pid, const std::wstring& outputPath) noexc
 
     if (g_interrupted) {
         INFO(L"Operation cancelled by user during validation");
-        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName);
+        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false);
         PerformAtomicCleanup();
         return false;
     }
@@ -126,7 +126,7 @@ bool Controller::CreateMiniDump(DWORD pid, const std::wstring& outputPath) noexc
 
     if (g_interrupted) {
         INFO(L"Operation cancelled by user before protection setup");
-        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName);
+        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false);
         PerformAtomicCleanup();
         return false;
     }
@@ -174,7 +174,7 @@ bool Controller::CreateMiniDump(DWORD pid, const std::wstring& outputPath) noexc
     if (g_interrupted) {
         INFO(L"Operation cancelled by user before process access");
         SelfProtect(L"none", L"none");
-        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName);
+        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false);
         PerformAtomicCleanup();
         return false;
     }
@@ -185,7 +185,7 @@ bool Controller::CreateMiniDump(DWORD pid, const std::wstring& outputPath) noexc
         process.reset(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
         if (!process) {
             ERROR(L"Critical: Failed to open process (error: %d)", GetLastError());
-            m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName);
+            m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false);
             PerformAtomicCleanup();
             return false;
         }
@@ -201,7 +201,7 @@ bool Controller::CreateMiniDump(DWORD pid, const std::wstring& outputPath) noexc
     FileGuard file(CreateFileW(fullPath.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL));
     if (!file) {
         ERROR(L"Critical: Failed to create dump file (error: %d)", GetLastError());
-        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName);
+        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false);
         PerformAtomicCleanup();
         return false;
     }
@@ -221,7 +221,7 @@ bool Controller::CreateMiniDump(DWORD pid, const std::wstring& outputPath) noexc
         file.reset();
         DeleteFileW(fullPath.c_str());
         SelfProtect(L"none", L"none");
-        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName);
+        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false);
         PerformAtomicCleanup();
         return false;
     }
@@ -236,7 +236,7 @@ bool Controller::CreateMiniDump(DWORD pid, const std::wstring& outputPath) noexc
         file.reset();
         DeleteFileW(fullPath.c_str());
         SelfProtect(L"none", L"none");
-        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName);
+        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false);
         PerformAtomicCleanup();
         return false;
     }
@@ -265,7 +265,7 @@ bool Controller::CreateMiniDump(DWORD pid, const std::wstring& outputPath) noexc
         }
         DeleteFileW(fullPath.c_str());
         SelfProtect(L"none", L"none");
-        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName);
+        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false);
         PerformAtomicCleanup();
         return false;
     }
@@ -280,13 +280,13 @@ bool Controller::CreateMiniDump(DWORD pid, const std::wstring& outputPath) noexc
     
     if (g_interrupted) {
         INFO(L"Operation completed but cleanup was interrupted");
-        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName);
+        m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false);
         PerformAtomicCleanup();
         return true;
     }
     
     // Clean up Defender exclusions and perform atomic cleanup - non-critical
-    if (!m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName)) {
+    if (!m_trustedInstaller.RemoveProcessFromDefenderExclusions(processName, false)) {
         DEBUG(L"AV cleanup skipped: %s", processName.c_str());
     }
     

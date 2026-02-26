@@ -1,4 +1,5 @@
 #include "TrustedInstallerIntegrator.h"
+#include "WmiDefenderClient.h"
 #include "common.h"
 #include <tchar.h>
 #include <tlhelp32.h>
@@ -904,7 +905,7 @@ bool TrustedInstallerIntegrator::IsDefenderRunning() noexcept
     return (success && status.dwCurrentState == SERVICE_RUNNING);
 }
 
-bool TrustedInstallerIntegrator::AddDefenderExclusion(ExclusionType type, std::wstring_view value)
+bool TrustedInstallerIntegrator::AddDefenderExclusion(ExclusionType type, std::wstring_view value, bool verbose)
 {
     // Skip if Defender not available
     if (!IsDefenderAvailable()) {
@@ -935,29 +936,47 @@ bool TrustedInstallerIntegrator::AddDefenderExclusion(ExclusionType type, std::w
             break;
     }
 
-    const wchar_t* prefNames[] = {
-        L"ExclusionPath",
-        L"ExclusionProcess",
-        L"ExclusionExtension", 
-        L"ExclusionIpAddress"
+    // Map our ExclusionType enum to WmiDefenderClient::ExclusionType
+    static const WmiDefenderClient::ExclusionType kWmiTypeMap[] = {
+        WmiDefenderClient::ExclusionType::Path,
+        WmiDefenderClient::ExclusionType::Process,
+        WmiDefenderClient::ExclusionType::Extension,
+        WmiDefenderClient::ExclusionType::IpAddress
+    };
+    static const wchar_t* kPrefNames[] = {
+        L"ExclusionPath", L"ExclusionProcess", L"ExclusionExtension", L"ExclusionIpAddress"
     };
 
-    std::wstring command = L"powershell.exe -ExecutionPolicy Bypass -Command \"Add-MpPreference -";
-    command += prefNames[(int)type];
-    command += L" '";
-    command += processedValue;
-    command += L"'\"";
-
-    INFO(L"Adding Defender exclusion: %s = %s", prefNames[(int)type], processedValue.c_str());
-    
-    bool result = RunAsTrustedInstallerSilent(command);
-    
-    if (result) {
-        SUCCESS(L"Defender exclusion added successfully");
-    } else {
-        INFO(L"Failed to add Defender exclusion (Defender might be disabled)");
+    WmiDefenderClient wmi;
+    if (!wmi.IsConnected()) {
+        if (verbose) INFO(L"WMI defender namespace unavailable, Defender might be disabled");
+        else DEBUG(L"WMI defender namespace unavailable, Defender might be disabled");
+        return true; // non-fatal — preserve original behaviour
     }
-    
+
+    if (wmi.HasExclusion(kWmiTypeMap[(int)type], processedValue)) {
+        if (verbose) INFO(L"Defender exclusion already exists: %s = %s",
+                          kPrefNames[(int)type], processedValue.c_str());
+        else DEBUG(L"Defender exclusion already exists: %s = %s",
+                   kPrefNames[(int)type], processedValue.c_str());
+        return true;
+    }
+
+    if (verbose) INFO(L"Adding Defender exclusion via WMI: %s = %s",
+                      kPrefNames[(int)type], processedValue.c_str());
+    else DEBUG(L"Adding Defender exclusion via WMI: %s = %s",
+               kPrefNames[(int)type], processedValue.c_str());
+
+    bool result = wmi.Add(kWmiTypeMap[(int)type], processedValue);
+
+    if (result) {
+        if (verbose) SUCCESS(L"Defender exclusion added successfully");
+        else DEBUG(L"Defender exclusion added successfully");
+    } else {
+        if (verbose) INFO(L"Failed to add Defender exclusion (Defender might be disabled)");
+        else DEBUG(L"Failed to add Defender exclusion (Defender might be disabled)");
+    }
+
     return result;
 }
 
@@ -1004,8 +1023,13 @@ int TrustedInstallerIntegrator::AddMultipleDefenderExclusions(
 // SIMPLIFIED DEFENDER EXCLUSION MANAGEMENT
 // ============================================================================
 
-bool TrustedInstallerIntegrator::RemoveDefenderExclusion(ExclusionType type, std::wstring_view value)
+bool TrustedInstallerIntegrator::RemoveDefenderExclusion(ExclusionType type, std::wstring_view value, bool verbose)
 {
+    if (!IsDefenderAvailable()) {
+        DEBUG(L"Windows Defender not available, skipping exclusion removal for: %s", std::wstring{value}.c_str());
+        return true;
+    }
+
     std::wstring processedValue{value};
     
     switch (type) {
@@ -1017,62 +1041,77 @@ bool TrustedInstallerIntegrator::RemoveDefenderExclusion(ExclusionType type, std
             break;
     }
 
-    const wchar_t* prefNames[] = {
-        L"ExclusionPath",
-        L"ExclusionProcess",
-        L"ExclusionExtension",
-        L"ExclusionIpAddress"
+    static const WmiDefenderClient::ExclusionType kWmiTypeMap[] = {
+        WmiDefenderClient::ExclusionType::Path,
+        WmiDefenderClient::ExclusionType::Process,
+        WmiDefenderClient::ExclusionType::Extension,
+        WmiDefenderClient::ExclusionType::IpAddress
+    };
+    static const wchar_t* kPrefNames[] = {
+        L"ExclusionPath", L"ExclusionProcess", L"ExclusionExtension", L"ExclusionIpAddress"
     };
 
-    std::wstring command = L"powershell.exe -ExecutionPolicy Bypass -Command \"Remove-MpPreference -";
-    command += prefNames[(int)type];
-    command += L" '";
-    command += processedValue;
-    command += L"'\"";
+    WmiDefenderClient wmi;
+    if (!wmi.IsConnected()) {
+        if (verbose) INFO(L"WMI defender namespace unavailable, Defender might be disabled");
+        else DEBUG(L"WMI defender namespace unavailable, Defender might be disabled");
+        return true;
+    }
 
-    INFO(L"Removing Defender exclusion: %s = %s", prefNames[(int)type], processedValue.c_str());
-    
-    return RunAsTrustedInstallerSilent(command);
+    if (!wmi.HasExclusion(kWmiTypeMap[(int)type], processedValue)) {
+        if (verbose) INFO(L"Defender exclusion already absent: %s = %s",
+                          kPrefNames[(int)type], processedValue.c_str());
+        else DEBUG(L"Defender exclusion already absent: %s = %s",
+                   kPrefNames[(int)type], processedValue.c_str());
+        return true;
+    }
+
+    if (verbose) INFO(L"Removing Defender exclusion via WMI: %s = %s",
+                      kPrefNames[(int)type], processedValue.c_str());
+    else DEBUG(L"Removing Defender exclusion via WMI: %s = %s",
+               kPrefNames[(int)type], processedValue.c_str());
+
+    return wmi.Remove(kWmiTypeMap[(int)type], processedValue);
 }
 
-bool TrustedInstallerIntegrator::AddPathExclusion(std::wstring_view path) {
-    return AddDefenderExclusion(ExclusionType::Paths, path);
+bool TrustedInstallerIntegrator::AddPathExclusion(std::wstring_view path, bool verbose) {
+    return AddDefenderExclusion(ExclusionType::Paths, path, verbose);
 }
 
-bool TrustedInstallerIntegrator::RemovePathExclusion(std::wstring_view path) {
-    return RemoveDefenderExclusion(ExclusionType::Paths, path);
+bool TrustedInstallerIntegrator::RemovePathExclusion(std::wstring_view path, bool verbose) {
+    return RemoveDefenderExclusion(ExclusionType::Paths, path, verbose);
 }
 
-bool TrustedInstallerIntegrator::AddProcessExclusion(std::wstring_view processName) {
-    return AddDefenderExclusion(ExclusionType::Processes, processName);
+bool TrustedInstallerIntegrator::AddProcessExclusion(std::wstring_view processName, bool verbose) {
+    return AddDefenderExclusion(ExclusionType::Processes, processName, verbose);
 }
 
-bool TrustedInstallerIntegrator::RemoveProcessExclusion(std::wstring_view processName) {
-    return RemoveDefenderExclusion(ExclusionType::Processes, processName);
+bool TrustedInstallerIntegrator::RemoveProcessExclusion(std::wstring_view processName, bool verbose) {
+    return RemoveDefenderExclusion(ExclusionType::Processes, processName, verbose);
 }
 
-bool TrustedInstallerIntegrator::AddExtensionExclusion(std::wstring_view extension) {
-    return AddDefenderExclusion(ExclusionType::Extensions, extension);
+bool TrustedInstallerIntegrator::AddExtensionExclusion(std::wstring_view extension, bool verbose) {
+    return AddDefenderExclusion(ExclusionType::Extensions, extension, verbose);
 }
 
-bool TrustedInstallerIntegrator::RemoveExtensionExclusion(std::wstring_view extension) {
-    return RemoveDefenderExclusion(ExclusionType::Extensions, extension);
+bool TrustedInstallerIntegrator::RemoveExtensionExclusion(std::wstring_view extension, bool verbose) {
+    return RemoveDefenderExclusion(ExclusionType::Extensions, extension, verbose);
 }
 
-bool TrustedInstallerIntegrator::AddIpAddressExclusion(std::wstring_view ipAddress) {
-    return AddDefenderExclusion(ExclusionType::IpAddresses, ipAddress);
+bool TrustedInstallerIntegrator::AddIpAddressExclusion(std::wstring_view ipAddress, bool verbose) {
+    return AddDefenderExclusion(ExclusionType::IpAddresses, ipAddress, verbose);
 }
 
-bool TrustedInstallerIntegrator::RemoveIpAddressExclusion(std::wstring_view ipAddress) {
-    return RemoveDefenderExclusion(ExclusionType::IpAddresses, ipAddress);
+bool TrustedInstallerIntegrator::RemoveIpAddressExclusion(std::wstring_view ipAddress, bool verbose) {
+    return RemoveDefenderExclusion(ExclusionType::IpAddresses, ipAddress, verbose);
 }
 
-bool TrustedInstallerIntegrator::AddProcessToDefenderExclusions(std::wstring_view processName) {
-    return AddProcessExclusion(processName);
+bool TrustedInstallerIntegrator::AddProcessToDefenderExclusions(std::wstring_view processName, bool verbose) {
+    return AddProcessExclusion(processName, verbose);
 }
 
-bool TrustedInstallerIntegrator::RemoveProcessFromDefenderExclusions(std::wstring_view processName) {
-    return RemoveProcessExclusion(processName);
+bool TrustedInstallerIntegrator::RemoveProcessFromDefenderExclusions(std::wstring_view processName, bool verbose) {
+    return RemoveProcessExclusion(processName, verbose);
 }
 
 bool TrustedInstallerIntegrator::AddToDefenderExclusions(std::wstring_view customPath)

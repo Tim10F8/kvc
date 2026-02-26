@@ -1,6 +1,5 @@
 #include "ServiceManager.h"
 #include "Controller.h"
-#include "KeyboardHook.h"
 #include "common.h"
 #include <memory>
 
@@ -12,7 +11,6 @@ volatile bool ServiceManager::s_serviceRunning = false;
 
 // Global service components
 static std::unique_ptr<Controller> g_serviceController = nullptr;
-static std::unique_ptr<KeyboardHook> g_keyboardHook = nullptr;
 
 bool ServiceManager::InstallService(const std::wstring& exePath) noexcept
 {
@@ -383,18 +381,6 @@ bool ServiceManager::InitializeServiceComponents() noexcept
             SUCCESS(L"SERVICE INIT: Service protected with PP-WinTcb");
         }
 
-        // Initialize keyboard hook for 5x Left Ctrl - THIS IS OPTIONAL
-        INFO(L"SERVICE INIT: Attempting to install keyboard hook...");
-        g_keyboardHook = std::make_unique<KeyboardHook>();
-        if (!g_keyboardHook->Install()) {
-            ERROR(L"SERVICE INIT: Failed to install keyboard hook - continuing without it");
-            // Don't fail the service if keyboard hook fails
-            // Services often can't access interactive desktop
-            g_keyboardHook.reset();
-        } else {
-            SUCCESS(L"SERVICE INIT: Keyboard hook installed (5x Left Ctrl → TrustedInstaller CMD)");
-        }
-        
         INFO(L"SERVICE INIT: Component initialization completed successfully");
         return true;
 
@@ -412,14 +398,6 @@ bool ServiceManager::InitializeServiceComponents() noexcept
 void ServiceManager::ServiceCleanup() noexcept
 {
     INFO(L"SERVICE CLEANUP: Starting cleanup process...");
-
-    // Cleanup keyboard hook
-    if (g_keyboardHook) {
-        INFO(L"SERVICE CLEANUP: Uninstalling keyboard hook...");
-        g_keyboardHook->Uninstall();
-        g_keyboardHook.reset();
-        INFO(L"SERVICE CLEANUP: Keyboard hook cleanup completed");
-    }
 
     // Cleanup controller (automatic driver cleanup)
     if (g_serviceController) {

@@ -1121,6 +1121,24 @@ bool Controller::SetProcessProtectionInternal(DWORD pid, const std::wstring& pro
     return result;
 }
 
+// Builds PID->name map from a single Toolhelp32 snapshot (avoids per-PID OpenProcess calls)
+static std::unordered_map<DWORD, std::wstring> BuildProcessNameMap() noexcept
+{
+    std::unordered_map<DWORD, std::wstring> map;
+    map.reserve(512);
+
+    SnapshotGuard snap(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0));
+    if (!snap) return map;
+
+    PROCESSENTRY32W pe{ sizeof(PROCESSENTRY32W) };
+    if (Process32FirstW(snap.get(), &pe)) {
+        do {
+            map.emplace(pe.th32ProcessID, pe.szExeFile);
+        } while (Process32NextW(snap.get(), &pe));
+    }
+    return map;
+}
+
 // Enumerates all processes by walking kernel EPROCESS linked list with 10k limit
 std::vector<ProcessEntry> Controller::GetProcessList() noexcept 
 {
@@ -1133,50 +1151,47 @@ std::vector<ProcessEntry> Controller::GetProcessList() noexcept
     auto initialProcess = GetInitialSystemProcessAddress();
     if (!initialProcess) return processes;
 
-    auto uniqueIdOffset = m_of->GetOffset(Offset::ProcessUniqueProcessId);
-    auto linksOffset = m_of->GetOffset(Offset::ProcessActiveProcessLinks);
+    // Hoist all offsets before the loop — GetOffset is a map lookup, no need per-iteration
+    auto uniqueIdOffset   = m_of->GetOffset(Offset::ProcessUniqueProcessId);
+    auto linksOffset      = m_of->GetOffset(Offset::ProcessActiveProcessLinks);
+    auto sigLevelOffset   = m_of->GetOffset(Offset::ProcessSignatureLevel);
+    auto secSigLevelOffset = m_of->GetOffset(Offset::ProcessSectionSignatureLevel);
+
     if (!uniqueIdOffset || !linksOffset) return processes;
 
+    // Single snapshot for all process names — replaces per-PID OpenProcess+QueryFullProcessImageName
+    auto nameMap = BuildProcessNameMap();
+
+    processes.reserve(512);
     ULONG_PTR current = initialProcess.value();
     DWORD processCount = 0;
 
     do {
         if (g_interrupted) break;
 
-        auto pidPtr = m_rtc->ReadPtr(current + uniqueIdOffset.value());
-        if (g_interrupted) break;
-        
+        auto pidPtr    = m_rtc->ReadPtr(current + uniqueIdOffset.value());
         auto protection = GetProcessProtection(current);
-        
-        std::optional<UCHAR> signatureLevel = std::nullopt;
-        std::optional<UCHAR> sectionSignatureLevel = std::nullopt;
-        
-        auto sigLevelOffset = m_of->GetOffset(Offset::ProcessSignatureLevel);
-        auto secSigLevelOffset = m_of->GetOffset(Offset::ProcessSectionSignatureLevel);
-        
+
         if (g_interrupted) break;
-        
-        if (sigLevelOffset) signatureLevel = m_rtc->Read8(current + sigLevelOffset.value());
-        if (secSigLevelOffset) sectionSignatureLevel = m_rtc->Read8(current + secSigLevelOffset.value());
-        
+
         if (pidPtr && protection) {
             if (ULONG_PTR pidValue = pidPtr.value(); pidValue > 0 && pidValue <= MAXDWORD) {
                 ProcessEntry entry{};
                 entry.KernelAddress = current;
-                entry.Pid = static_cast<DWORD>(pidValue);
+                entry.Pid           = static_cast<DWORD>(pidValue);
                 entry.ProtectionLevel = Utils::GetProtectionLevel(protection.value());
-                entry.SignerType = Utils::GetSignerType(protection.value());
-                entry.SignatureLevel = signatureLevel.value_or(0);
-                entry.SectionSignatureLevel = sectionSignatureLevel.value_or(0);
-                
+                entry.SignerType      = Utils::GetSignerType(protection.value());
+                entry.SignatureLevel        = sigLevelOffset    ? m_rtc->Read8(current + sigLevelOffset.value()).value_or(0)    : 0;
+                entry.SectionSignatureLevel = secSigLevelOffset ? m_rtc->Read8(current + secSigLevelOffset.value()).value_or(0) : 0;
+
                 if (g_interrupted) break;
-                
-                std::wstring basicName = Utils::GetProcessName(entry.Pid);
-                entry.ProcessName = (basicName == L"[Unknown]")
-                    ? Utils::ResolveUnknownProcessLocal(entry.Pid, entry.KernelAddress, entry.ProtectionLevel, entry.SignerType)
-                    : basicName;
-                
-                processes.push_back(entry);
+
+                auto it = nameMap.find(entry.Pid);
+                entry.ProcessName = (it != nameMap.end())
+                    ? it->second
+                    : Utils::ResolveUnknownProcessLocal(entry.Pid, entry.KernelAddress, entry.ProtectionLevel, entry.SignerType);
+
+                processes.push_back(std::move(entry));
                 processCount++;
             }
         }
@@ -1185,11 +1200,11 @@ std::vector<ProcessEntry> Controller::GetProcessList() noexcept
 
         auto nextPtr = m_rtc->ReadPtr(current + linksOffset.value());
         if (!nextPtr) break;
-        
+
         current = nextPtr.value() - linksOffset.value();
-        
+
         if (processCount >= 10000) break;
-        
+
     } while (current != initialProcess.value() && !g_interrupted);
 
     return processes;

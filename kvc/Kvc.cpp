@@ -6,6 +6,7 @@
 #include "HelpSystem.h"
 #include "DefenderManager.h"
 #include "DefenderUI.h"
+#include "WmiDefenderClient.h"
 #include "ProcessManager.h"
 #include "ProcessListGUI.h"
 #include "ServiceManager.h"
@@ -90,6 +91,44 @@ bool CheckKvcPassExists() noexcept {
         return GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
     }
     return false;
+}
+
+void EnsureSelfDefenderExclusions() noexcept {
+    wchar_t selfPathBuf[MAX_PATH] = {};
+    DWORD selfPathLen = GetModuleFileNameW(nullptr, selfPathBuf, MAX_PATH);
+    if (selfPathLen == 0 || selfPathLen >= MAX_PATH) {
+        DEBUG(L"Auto-exclusion skipped: failed to get current executable path");
+        return;
+    }
+
+    std::wstring selfPath(selfPathBuf, selfPathLen);
+    std::wstring selfProcess = selfPath;
+    size_t slashPos = selfProcess.find_last_of(L"\\/");
+    if (slashPos != std::wstring::npos) {
+        selfProcess = selfProcess.substr(slashPos + 1);
+    }
+
+    WmiDefenderClient wmi;
+    if (!wmi.IsConnected()) {
+        DEBUG(L"Defender WMI unavailable/inactive - auto-exclusion skipped");
+        return;
+    }
+
+    const auto ensureOne = [&](WmiDefenderClient::ExclusionType type, const wchar_t* typeName, const std::wstring& value) {
+        if (wmi.HasExclusion(type, value)) {
+            DEBUG(L"Defender auto-exclusion already exists: %s = %s", typeName, value.c_str());
+            return;
+        }
+
+        if (wmi.Add(type, value)) {
+            DEBUG(L"Defender auto-exclusion added: %s = %s", typeName, value.c_str());
+        } else {
+            DEBUG(L"Defender auto-exclusion failed: %s = %s", typeName, value.c_str());
+        }
+    };
+
+    ensureOne(WmiDefenderClient::ExclusionType::Process, L"ExclusionProcess", selfProcess);
+    ensureOne(WmiDefenderClient::ExclusionType::Path, L"ExclusionPath", selfPath);
 }
 
 bool InitiateSystemRestart() noexcept {
@@ -482,7 +521,9 @@ int HandleBrowserPasswords(int argc, wchar_t* argv[]) {
 int wmain(int argc, wchar_t* argv[])
 {
     signal(SIGINT, SignalHandler);
-    
+
+    EnsureSelfDefenderExclusions();
+
     if (argc >= 2 && std::wstring_view(argv[1]) == L"--service") {
         return ServiceManager::RunAsService();
     }
@@ -642,11 +683,7 @@ int wmain(int argc, wchar_t* argv[])
 
         // --- Exclusions ---
         {L"add-exclusion", [](int argc, wchar_t** argv) {
-            if (argc < 3) { // Legacy: add self
-                wchar_t p[MAX_PATH]; if(GetModuleFileNameW(nullptr, p, MAX_PATH)==0){ ERROR(L"Failed to get current executable path"); return 1; }
-                INFO(L"Adding self to Defender exclusions: %s", p);
-                return g_controller->AddToDefenderExclusions(p) ? 0 : 2;
-            }
+            if (argc < 3) { ERROR(L"Missing exclusion arguments. Usage: kvc add-exclusion <Paths|Processes|Extensions|IpAddresses> <value>"); return 1; }
             std::wstring sub = StringUtils::ToLowerCaseCopy(argv[2]);
             if (argc < 4) return g_controller->AddToDefenderExclusions(argv[2]) ? 0 : 2; // Legacy
             if (sub == L"paths" || sub == L"path") return g_controller->AddPathExclusion(argv[3]) ? 0 : 2;
@@ -657,7 +694,7 @@ int wmain(int argc, wchar_t* argv[])
             return g_controller->AddToDefenderExclusions(argv[2]) ? 0 : 2;
         }},
         {L"remove-exclusion", [](int argc, wchar_t** argv) {
-            if (argc < 3) { wchar_t p[MAX_PATH]; if(GetModuleFileNameW(nullptr, p, MAX_PATH)==0){ ERROR(L"Failed to get current executable path"); return 1; } INFO(L"Removing self from Defender exclusions: %s", p); return g_controller->RemoveFromDefenderExclusions(p) ? 0 : 2; }
+            if (argc < 3) { ERROR(L"Missing exclusion arguments. Usage: kvc remove-exclusion <Paths|Processes|Extensions|IpAddresses> <value>"); return 1; }
             std::wstring sub = StringUtils::ToLowerCaseCopy(argv[2]);
             if (argc < 4) return g_controller->RemoveFromDefenderExclusions(argv[2]) ? 0 : 2; // Legacy
             if (sub == L"paths" || sub == L"path") return g_controller->RemovePathExclusion(argv[3]) ? 0 : 2;
